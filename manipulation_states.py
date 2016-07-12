@@ -46,7 +46,18 @@ def initGlobals():
                 [-1.60, 2.40, 1.00, -2.50, 1.50, 1.20],
                 [-1.60, 2.60, 1.20, -3.14, 1.50, 1.20]]
 
-  eeTra =      [[0.40, 0, 0.50, 0.0, 0.0, 0.0]]
+#  eeTra = 	[[0.087, 0.167, 0.169, 0.175, 0.954, 0.127, 0.207],
+#		[0.181, 0.183, 0.417, 0.239, 0.844, 0.214, 0.429], 
+#		[0.241, 0.133, 0.542, 0.299, 0.664, 0.380, 0.570], 
+#		[0.244, -0.014, 0.555, 0.455, 0.421, 0.426, 0.659], 
+#		[0.241, -0.0572, 0.685, 0.379, 0.329, 0.507, 0.701], 
+#		[0.169, -0.103, 0.859, 0.191, 0.111, 0.639, 0.737]]
+  eeTra =	[[0.554,0.039,1.180,0.235,0.799,0.551,0.057],
+		[0.714,0.094,1.183,0.473,0.786,0.391,0.073],
+		[0.835,0.132,1.149,0.667,0.684,0.264,0.134],
+		[0.820,0.141,1.047,0.766,0.622,-0.012,0.162],
+		[0.916,0.149,0.998,0.851,0.505,-0.034,0.138],
+		[1.046,0.126,0.946,0.970,0.225,-0.056,0.072]]
 
   resetPos = [[-1.90, 1.50, 0.50, -2.00, 3.00, 0.72]]
 
@@ -116,7 +127,7 @@ class ExecuteTrajectoryState(smach.State):
     if userdata.trajectoryIn is None:
       print 'Executing saved trajectory'
  #     sendPlan(self.arm, self.traDict['person'])  
-      self.arm.sendWaypointTrajectory(_traDict['person'])
+    #  self.arm.sendWaypointTrajectory(_traDict['person'])
       sendPlanRevised(self.arm, _traDict['person'])
       return 'succeeded'
     print 'Executing trajectory'
@@ -160,8 +171,12 @@ class ExecuteEETrajectoryState(smach.State):
       pose.position.x = pt[0]
       pose.position.y = pt[1]
       pose.position.z = pt[2]
-      pose.orientation = [pt[3],pt[4],pt[5]]
-      newTra = self.arm_planner.plan_poseTargetInput(pose)
+      pose.orientation.x = pt[3]
+      pose.orientation.y = pt[4]
+      pose.orientation.z = pt[5]
+      pose.orientation.w = pt[6]
+      #newTra = self.arm_planner.plan_poseTargetInput(pose)
+      newTra = self.arm_planner.get_IK(pose)
       if newTra is None:
 	return None
       trajectories.append(newTra)
@@ -175,11 +190,11 @@ class ExecuteEETrajectoryState(smach.State):
       print 'Executing saved trajectory'
       #self.arm.sendWaypointTrajectory(_traDict['person'])
       traj = self.planTrajectory(_traDict['ee'])
+      
       if traj is None:
 	print 'Could not find a plan'
 	return 'failed'
-      print traj
-      sendPlanList(self.arm, traj)
+      sendPlanRevised(self.arm, traj)
       return 'succeeded'
     else:
       print 'Executing trajectory'
@@ -224,13 +239,15 @@ class PlanDMPState(smach.State):
     t_0 = 0
     #goal = [8.0,7.0]         #Plan to a different goal than demo
     goal1 = [-1.60, 3.14, 1.20, -3.14, 1.50, 1.20]
-    goal2 = [-1.60, 0, 1.20, -3.14, 1.50, 1.20]
+    goal2 = [2.60, 3.14, 1.20, -3.14, 1.50, 1.20]
+                #[-1.60, 2.60, 1.20, -3.14, 1.50, 1.20]]
+ #   goal2 = [3.1, 0, 1.20, -3.14, 1.50, 1.20]
     goal_thresh = [0.2,0.2,0.2,0.2,0.2,0.2]
     seg_length = -1          #Plan until convergence to goal
     tau = 2 * req.tau       #Desired plan should take twice as long as demo
     dt = 1.0
     integrate_iter = 1       #dt is rather large, so this is > 1  
-    plan = self.learner.makePlanRequest(x_0, x_dot_0, t_0, goal2, goal_thresh,
+    plan = self.learner.makePlanRequest(x_0, x_dot_0, t_0, goal1, goal_thresh,
                            seg_length, tau, dt, integrate_iter)
 
     self.ss.say("done!")
@@ -283,7 +300,7 @@ class PlanEEDMPState(smach.State):
     tau = 2 * req.tau       #Desired plan should take twice as long as demo
     dt = 1.0
     integrate_iter = 1       #dt is rather large, so this is > 1  
-    plan = self.learner.makePlanRequest(x_0, x_dot_0, t_0, goal2, goal_thresh,
+    plan = self.learner.makePlanRequest(x_0, x_dot_0, t_0, goal1, goal_thresh,
                            seg_length, tau, dt, integrate_iter)
 
     self.ss.say("done!")
