@@ -41,10 +41,10 @@ def initGlobals():
 
   handOffTra = [[-1.90, 1.50, 0.50, -2.00, 3.00, 0.72],
                 [-1.80, 1.80, 1.00, -2.10, 2.50, 0.72],
-                [-1.70, 2.00, 1.00, -2.20, 2.00, 0.90],
-                [-1.60, 2.20, 0.80, -2.20, 1.50, 1.20],
-                [-1.60, 2.40, 1.00, -2.50, 1.50, 1.20],
-                [-1.60, 2.60, 1.20, -3.14, 1.50, 1.20]]
+                [-1.70, 1.90, 1.00, -2.20, 2.00, 0.90],
+                [-1.60, 2.00, 0.80, -2.20, 1.50, 1.20],
+                [-1.60, 2.10, 1.00, -2.50, 1.50, 1.20],
+                [-1.60, 2.20, 1.20, -3.14, 1.50, 1.20]]
 
 #  eeTra = 	[[0.087, 0.167, 0.169, 0.175, 0.954, 0.127, 0.207],
 #		[0.181, 0.183, 0.417, 0.239, 0.844, 0.214, 0.429], 
@@ -142,74 +142,6 @@ class ExecuteTrajectoryState(smach.State):
     userdata.execResultOut = 'done'
     return 'succeeded'
 
-class ExecuteEETrajectoryState(smach.State):
-  def __init__(self):
-    smach.State.__init__(self,
-                         outcomes=['succeeded','failed','aborted'],
-                         input_keys=['trajectoryIn','timingsIn'],
-                         output_keys=['execResultOut'])
-
-
-    if not _isTheManipulationStateGlobalsInitialized:
-      initGlobals()
-    self.arm = _manipulator.arm # Arm()
-    self.arm_planner = _arm_planner
-    self.ss = _speech_synth #speech_synthesizer.SpeechSynthesizer()
-
-    self.functionDict = {'retract':self.arm.upper_tuck}
-    rospy.wait_for_service('trac_ik_wrapper')
-
-  def resetPose(self):
-    print 'going to reset position'
-    sendPlanRevised(self.arm, _traDict['reset'])
-    time.sleep(3.0)
-
-  def planTrajectory(self, points):
-    self.arm_planner.group[0].set_pose_reference_frame('base_link')
-    trajectories = []
-    for pt in points:
-      print 'planning to: ' + str(pt)
-      pose = Pose()
-      pose.position.x = pt[0]
-      pose.position.y = pt[1]
-      pose.position.z = pt[2]
-      pose.orientation.x = pt[3]
-      pose.orientation.y = pt[4]
-      pose.orientation.z = pt[5]
-      pose.orientation.w = pt[6]
-      #newTra = self.arm_planner.plan_poseTargetInput(pose)
-      try:
-	getIK = rospy.ServiceProxy('trac_ik_wrapper', IKHandler)
-	pose = getIK(pt, pt)
-      except rospy.ServiceException, e:
-	print "Service call failed: %s"%e
-
- #     newTra = self.arm_planner.get_IK(pose)
-      if not(newTra is None):
-#	return None
-        trajectories.append(newTra)
-    return trajectories
-
-  def execute(self, userdata):
-    self.resetPose()
-    rospy.loginfo('Moving the arm')
-    userdata.execResultOut = None
-    if userdata.trajectoryIn is None:
-      print 'Executing saved trajectory'
-      #self.arm.sendWaypointTrajectory(_traDict['person'])
-      traj = self.planTrajectory(_traDict['ee'])
-      
-      if traj is None:
-	print 'Could not find a plan'
-	return 'failed'
-      sendPlanRevised(self.arm, traj)
-      return 'succeeded'
-    else:
-      print 'Executing trajectory'
-      sendTimedPlan(self.arm, userdata.trajectoryIn, userdata.timingsIn)
-      userdata.execResultOut = 'done'
-      return 'succeeded'
-
 class PlanDMPState(smach.State):
   def __init__(self):
     smach.State.__init__(self,
@@ -282,12 +214,6 @@ class PlanEEDMPState(smach.State):
     self.targetPose = None
     self.tf = tf.TransformListener(True)
  
-   # self.tfBuffer = tf2_ros.Buffer()
-   # self.listener = tf2_ros.TransformListener(self.tfBuffer)
-   # (trans,rot) = self.tfBuffer.lookup_transform('base_link', 'linear_actuator_link', rospy.Time(0))
-   # self.tr = trans.transform
-
-
   def convertPlan(self, original):
     pts = original.plan.points
     plan = []
@@ -303,9 +229,7 @@ class PlanEEDMPState(smach.State):
       response = ik(seed, goal)
     except rospy.ServiceException, e:
       print "Service call failed: %s"%e
-    #convPose = []
-    #for pt in pose:
-    #  convPose.append(pt)
+      return None
     return response.pose
 
   def transform(self, pt, originFrame, targetFrame):
@@ -315,7 +239,10 @@ class PlanEEDMPState(smach.State):
     ptMsg.pose.position.x = pt[0]
     ptMsg.pose.position.y = pt[1]
     ptMsg.pose.position.z = pt[2]
-    quat = tf.transformations.quaternion_from_euler(pt[3],pt[4],pt[5])
+    if len(pt) is 6:
+      quat = tf.transformations.quaternion_from_euler(pt[3],pt[4],pt[5])
+    if len(pt) is 7:
+      quat = (pt[3],pt[4],pt[5],pt[6])
     ptMsg.pose.orientation.x = quat[0]
     ptMsg.pose.orientation.y = quat[1]
     ptMsg.pose.orientation.z = quat[2]
@@ -339,16 +266,19 @@ class PlanEEDMPState(smach.State):
     x_dot_0 = [0.0,0.0,0.0,0.0,0.0,0.0]
     t_0 = 0
     #goal = [8.0,7.0]         #Plan to a different goal than demo
-    goal1 = _traDict['ee'][5]
+    goal1 = [0.554,0.038,1.1298,0.2354,0.7983,0.551,0.565] #_traDict['ee'][5]
+    #goal2 = [1.046,0.126,0.946,0.970,0.225,-0.056,0.072]
+    goal2 = [1.046,0.26,1.2,0.970,0.225,-0.056,0.072]
     goal_thresh = [0.2,0.2,0.2,0.2,0.2,0.2]
     seg_length = -1          #Plan until convergence to goal
     tau = 2 * req.tau       #Desired plan should take twice as long as demo
     dt = 1.0
     integrate_iter = 1       #dt is rather large, so this is > 1  
     
-    js_x_0 = self.getIK(self.transform(_traDict['person'][0],"/base_link","/linear_actuator_link"), x_0)
-    js_goal = self.getIK(self.transform(_traDict['person'][5],"/base_link","/linear_actuator_link"), goal1)
-
+    js_x_0 = self.getIK(_traDict['person'][0], self.transform(x_0,"/base_link","/linear_actuator_link"))
+    js_goal = self.getIK(_traDict['person'][5], self.transform(goal2,"/base_link","/linear_actuator_link"))
+    if (js_x_0 is None) or (js_goal is None):
+	return 'failed'
     plan = self.learner.makePlanRequest(js_x_0, x_dot_0, t_0, js_goal, goal_thresh,
                            seg_length, tau, dt, integrate_iter)
 
