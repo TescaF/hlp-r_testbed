@@ -4,7 +4,7 @@ import roslib
 import rospy
 import smach
 import smach_ros
-
+import tf
 import sys
 import time
 
@@ -16,7 +16,7 @@ from manipulation import manipulator
 from manipulation.manipulator import *
 from manipulation.arm_moveit import *
 from modules.manipulation_module import DMPLearner
-
+from trac_ik_wrapper.srv import *
 from modules.utilities.baris_utils import *
 
 _manipulator = None
@@ -157,6 +157,7 @@ class ExecuteEETrajectoryState(smach.State):
     self.ss = _speech_synth #speech_synthesizer.SpeechSynthesizer()
 
     self.functionDict = {'retract':self.arm.upper_tuck}
+    rospy.wait_for_service('trac_ik_wrapper')
 
   def resetPose(self):
     print 'going to reset position'
@@ -177,7 +178,13 @@ class ExecuteEETrajectoryState(smach.State):
       pose.orientation.z = pt[5]
       pose.orientation.w = pt[6]
       #newTra = self.arm_planner.plan_poseTargetInput(pose)
-      newTra = self.arm_planner.get_IK(pose)
+      try:
+	getIK = rospy.ServiceProxy('trac_ik_wrapper', IKHandler)
+	pose = getIK(pt, pt)
+      except rospy.ServiceException, e:
+	print "Service call failed: %s"%e
+
+ #     newTra = self.arm_planner.get_IK(pose)
       if not(newTra is None):
 #	return None
         trajectories.append(newTra)
@@ -273,6 +280,13 @@ class PlanEEDMPState(smach.State):
     self.ss = _speech_synth #speech_synthesizer.SpeechSynthesizer()
     self.learner = DMPLearner(6,100,4)
     self.targetPose = None
+    self.tf = tf.TransformListener(True)
+ 
+   # self.tfBuffer = tf2_ros.Buffer()
+   # self.listener = tf2_ros.TransformListener(self.tfBuffer)
+   # (trans,rot) = self.tfBuffer.lookup_transform('base_link', 'linear_actuator_link', rospy.Time(0))
+   # self.tr = trans.transform
+
 
   def convertPlan(self, original):
     pts = original.plan.points
@@ -283,6 +297,36 @@ class PlanEEDMPState(smach.State):
       plan.append(pos)
     return plan,timings
 
+  def getIK(self, seed, goal):
+    try:
+      ik = rospy.ServiceProxy('trac_ik_wrapper', IKHandler)
+      response = ik(seed, goal)
+    except rospy.ServiceException, e:
+      print "Service call failed: %s"%e
+    #convPose = []
+    #for pt in pose:
+    #  convPose.append(pt)
+    return response.pose
+
+  def transform(self, pt, originFrame, targetFrame):
+    ptMsg = PoseStamped()
+    ptMsg.header.stamp = rospy.Time.now()
+    ptMsg.header.frame_id = originFrame
+    ptMsg.pose.position.x = pt[0]
+    ptMsg.pose.position.y = pt[1]
+    ptMsg.pose.position.z = pt[2]
+    quat = tf.transformations.quaternion_from_euler(pt[3],pt[4],pt[5])
+    ptMsg.pose.orientation.x = quat[0]
+    ptMsg.pose.orientation.y = quat[1]
+    ptMsg.pose.orientation.z = quat[2]
+    ptMsg.pose.orientation.w = quat[3]
+    self.tf.waitForTransform(originFrame, targetFrame, ptMsg.header.stamp, rospy.Duration(5.0))
+    tfPoint = self.tf.transformPose(targetFrame, ptMsg)
+    newQuat = (tfPoint.pose.orientation.x,tfPoint.pose.orientation.y,tfPoint.pose.orientation.z,tfPoint.pose.orientation.w)
+    euler = tf.transformations.euler_from_quaternion(newQuat)
+    return [tfPoint.pose.position.x, tfPoint.pose.position.y, tfPoint.pose.position.z,
+	euler[0], euler[1], euler[2]]
+
   def execute(self, userdata):
     rospy.loginfo('Calculating path')
     userdata.traOut = None
@@ -291,17 +335,21 @@ class PlanEEDMPState(smach.State):
     req = self.learner.makeLFDRequest(_traDict['person'], dt)
     self.learner.makeSetActiveRequest(req.dmp_list)
 
-    x_0 = [-1.90, 1.50, 0.50, -2.00, 3.00, 0.72]
+    x_0 = _traDict['ee'][0] # [-1.90, 1.50, 0.50, -2.00, 3.00, 0.72]
     x_dot_0 = [0.0,0.0,0.0,0.0,0.0,0.0]
     t_0 = 0
     #goal = [8.0,7.0]         #Plan to a different goal than demo
-    goal1 = [-1.60, 3.14, 1.20, 0.0, 0.0, 0.0]
+    goal1 = _traDict['ee'][5]
     goal_thresh = [0.2,0.2,0.2,0.2,0.2,0.2]
     seg_length = -1          #Plan until convergence to goal
     tau = 2 * req.tau       #Desired plan should take twice as long as demo
     dt = 1.0
     integrate_iter = 1       #dt is rather large, so this is > 1  
-    plan = self.learner.makePlanRequest(x_0, x_dot_0, t_0, goal1, goal_thresh,
+    
+    js_x_0 = self.getIK(self.transform(_traDict['person'][0],"/base_link","/linear_actuator_link"), x_0)
+    js_goal = self.getIK(self.transform(_traDict['person'][5],"/base_link","/linear_actuator_link"), goal1)
+
+    plan = self.learner.makePlanRequest(js_x_0, x_dot_0, t_0, js_goal, goal_thresh,
                            seg_length, tau, dt, integrate_iter)
 
     self.ss.say("done!")

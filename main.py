@@ -59,13 +59,13 @@ def main():
                                          'execute_dmp':'PlanDMP'},
                             remapping={'defaultTrajectory':'tra'}) 
 
-    smach.StateMachine.add('ExecuteTrajectory', ExecuteEETrajectoryState(), 
+    smach.StateMachine.add('ExecuteTrajectory', ExecuteTrajectoryState(), 
                             transitions={'succeeded':'Idle', 
                                          'failed':'Idle',
                                          'aborted':'Idle'},
                                          remapping={'trajectoryIn':'tra','timingsIn':'timings'})
 
-    smach.StateMachine.add('PlanDMP', PlanDMPState(), 
+    smach.StateMachine.add('PlanDMP', PlanEEDMPState(), 
                             transitions={'succeeded':'ExecuteTrajectory', 
                                          'failed':'Idle',
                                          'aborted':'Idle'},
