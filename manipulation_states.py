@@ -266,9 +266,11 @@ class PlanEEDMPState(smach.State):
     x_dot_0 = [0.0,0.0,0.0,0.0,0.0,0.0]
     t_0 = 0
     #goal = [8.0,7.0]         #Plan to a different goal than demo
-    goal1 = [0.554,0.038,1.1298,0.2354,0.7983,0.551,0.565] #_traDict['ee'][5]
+    #goal1 = [0.554,0.038,1.1298,0.2354,0.7983,0.551,0.565] #_traDict['ee'][5]
     #goal2 = [1.046,0.126,0.946,0.970,0.225,-0.056,0.072]
-    goal2 = [1.046,0.26,1.2,0.970,0.225,-0.056,0.072]
+    goal1 = [1.046,0.126,1.2,0.970,0.225,-0.056,0.072]
+    goal2 = [0.98,0.26,1.2,0.970,0.225,-0.056,0.072]
+    #goal2 = [0.98,0.06,1.25,0.970,0.225,-0.056,0.072]
     goal_thresh = [0.2,0.2,0.2,0.2,0.2,0.2]
     seg_length = -1          #Plan until convergence to goal
     tau = 2 * req.tau       #Desired plan should take twice as long as demo
