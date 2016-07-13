@@ -167,6 +167,7 @@ class ExecuteEETrajectoryState(smach.State):
     self.arm_planner.group[0].set_pose_reference_frame('base_link')
     trajectories = []
     for pt in points:
+      print 'planning to: ' + str(pt)
       pose = Pose()
       pose.position.x = pt[0]
       pose.position.y = pt[1]
@@ -177,9 +178,9 @@ class ExecuteEETrajectoryState(smach.State):
       pose.orientation.w = pt[6]
       #newTra = self.arm_planner.plan_poseTargetInput(pose)
       newTra = self.arm_planner.get_IK(pose)
-      if newTra is None:
-	return None
-      trajectories.append(newTra)
+      if not(newTra is None):
+#	return None
+        trajectories.append(newTra)
     return trajectories
 
   def execute(self, userdata):
