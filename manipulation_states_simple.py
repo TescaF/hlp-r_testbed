@@ -47,12 +47,12 @@ def initGlobals():
                 [-1.60, 2.10, 1.00, -2.50, 1.50, 1.20],
                 [-1.60, 2.20, 1.20, -3.14, 1.50, 1.20]]
 
-  eeTra =      [[0.554,0.039,1.180,0.235,0.799,0.551],
-		[0.765,0.091,1.198,0.455,0.766,0.428],
-		[0.826,0.129,1.173,0.663,0.669,0.289],
-		[0.812,0.139,1.093,0.768,0.597,0.052],
-		[0.915,0.146,1.102,0.852,0.471,0.092],
-		[1.047,0.119,1.149,0.966,0.190,0.137]]
+  eeTra =      [[0.554,0.039,1.380,0.235,0.799,0.551],
+		[0.765,0.091,1.398,0.455,0.766,0.428],
+		[0.826,0.129,1.373,0.663,0.669,0.289],
+		[0.812,0.139,1.293,0.768,0.597,0.052],
+		[0.915,0.146,1.302,0.852,0.471,0.092],
+		[1.047,0.119,1.349,0.966,0.190,0.137]]
 
   resetPos = [[-1.90, 1.50, 0.50, -2.00, 3.00, 0.72]]
 
@@ -64,16 +64,6 @@ def sendPlan(arm, plannedTra):
     arm.ang_pos_cmd(pt)
     time.sleep(0.1)
   return
-
-def getIK(seed, goal):
-  try:
-    ik = rospy.ServiceProxy('trac_ik_wrapper', IKHandler)
-    response = ik(seed, goal)
-  except rospy.ServiceException, e:
-    print "Service call failed: %s"%e
-    return None
-  return response.pose
-
 
 class ExecuteTrajectoryState(smach.State):
   def __init__(self):
@@ -137,10 +127,10 @@ class PlanEEDMPState(smach.State):
       plan.append(pos)
     return plan,timings
 
-  def getIK(self, seed, goal):
+  def getIK(self, ptCount, seed, goals):
     try:
       ik = rospy.ServiceProxy('trac_ik_wrapper', IKHandler)
-      response = ik(seed, goal)
+      response = ik(ptCount, seed, goals)
     except rospy.ServiceException, e:
       print "Service call failed: %s"%e
       return None
@@ -191,7 +181,7 @@ class PlanEEDMPState(smach.State):
     integrate_iter = 1  
     
     ee_x_0 = self.transform(x_0,"/base_link","/linear_actuator_link")
-    js_x_0 = self.getIK(_traDict['person'][0], self.transform(x_0,"/base_link","/linear_actuator_link"))
+    js_x_0 = self.getIK(1,_traDict['person'][0], self.transform(x_0,"/base_link","/linear_actuator_link"))
     ee_goal = self.transform(self.goal,"/base_link","/linear_actuator_link")
     plan = self.learner.makePlanRequest(ee_x_0, x_dot_0, t_0, ee_goal, goal_thresh,
                seg_length, tau, dt, integrate_iter)
@@ -203,12 +193,20 @@ class PlanEEDMPState(smach.State):
     js_plan = []
     prev = _traDict['person'][0] #js_x_0
     print 'js plan'
+    seeds = []
+    goals = []
     for pt in cvt_plan:
      # tr_pt = self.transform(pt, "/base_link","/linear_actuator_link")
-      js_pt = self.getIK(prev, pt)
-      prev = js_pt
-      js_plan.append(js_pt)
-      print js_pt
+      p = [pt[0],pt[1],pt[2],pt[3],pt[4],pt[5]]
+      goals = goals + p
+      
+    js_pts = self.getIK(len(cvt_plan), prev, goals)
+    for i in range (0,len(js_pts),6):
+        js_pt = [js_pts[i],js_pts[i+1],js_pts[i+2],js_pts[i+3],js_pts[i+4],js_pts[i+5]]
+        print js_pt
+	js_plan.append(js_pt)
+ #   prev = js_pt
+ #   js_plan.append(js_pt)
     userdata.traOut = js_plan
     #userdata.timings = timings
     userdata.timings = None
