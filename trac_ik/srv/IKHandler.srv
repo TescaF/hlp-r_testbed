@@ -1,0 +1,5 @@
+int32 points 
+float32[] seed
+float32[] goal
+---
+float32[] pose
