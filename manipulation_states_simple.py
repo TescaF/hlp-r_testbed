@@ -10,6 +10,7 @@ import sys
 import time
 
 from geometry_msgs.msg import Pose
+from trajectory_msgs.msg import JointTrajectoryPoint
 from decimal import *
 from speech_synth import speech_synthesizer 
 from speech_recog import speech_listener
@@ -173,14 +174,14 @@ class PlanEEDMPState(smach.State):
       plan.append(pos)
     return plan,timings
 
-  def getIK(self, ptCount, seed, goals):
+  def getIK(self, seed, goals, tol):
     try:
       ik = rospy.ServiceProxy('trac_ik_wrapper', IKHandler)
-      response = ik(ptCount, seed, goals)
+      response = ik(seed, goals, tol)
     except rospy.ServiceException, e:
       print "Service call failed: %s"%e
       return None
-    return response.pose
+    return response.poses
 
   def transform(self, pt, originFrame, targetFrame):
     ptMsg = PoseStamped()
@@ -203,6 +204,21 @@ class PlanEEDMPState(smach.State):
     euler = tf.transformations.euler_from_quaternion(newQuat)
     return [tfPoint.pose.position.x, tfPoint.pose.position.y, tfPoint.pose.position.z,
 	euler[0], euler[1], euler[2]]
+
+  def convertGoals(self, goals):
+    converted = []
+    for g in goals:
+      initPose = Pose()
+      initPose.position.x = g[0]
+      initPose.position.y = g[1]
+      initPose.position.z = g[2]
+      quat = tf.transformations.quaternion_from_euler(g[3],g[4],g[5])
+      initPose.orientation.x = quat[0]
+      initPose.orientation.y = quat[1]
+      initPose.orientation.z = quat[2]
+      initPose.orientation.w = quat[3]
+      converted.append(initPose)
+    return converted
 
   def execute(self, userdata):
     rospy.loginfo('Calculating path')
@@ -227,7 +243,15 @@ class PlanEEDMPState(smach.State):
     integrate_iter = 1  
     
     ee_x_0 = self.transform(x_0,"/base_link","/linear_actuator_link")
-    js_x_0 = self.getIK(1,_traDict['person'][0], self.transform(x_0,"/base_link","/linear_actuator_link"))
+    
+    initEE = _traDict['person'][0]
+    maxF = sys.float_info.max
+    tol = [0.01,0.01,0.01,100,100,100]
+    #js_x_0 = self.getIK(_traDict['person'][0], self.transform(x_0,"/base_link","/linear_actuator_link"))
+    #igoals = []
+    #igoals.append(self.transform(x_0, "/base_link","/linear_actuator_link"))
+    #initGoals = self.convertGoals(igoals)
+    #js_x_0 = self.getIK(_traDict['person'][0], initGoals, tol)
     ee_goal = self.transform(self.goal,"/base_link","/linear_actuator_link")
     plan = self.learner.makePlanRequest(ee_x_0, x_dot_0, t_0, ee_goal, goal_thresh,
                seg_length, tau, dt, integrate_iter)
@@ -248,11 +272,11 @@ class PlanEEDMPState(smach.State):
     for pt in cvt_plan:
      # tr_pt = self.transform(pt, "/base_link","/linear_actuator_link")
       p = [pt[0],pt[1],pt[2],pt[3],pt[4],pt[5]]
-      goals = goals + p
-      
-    js_pts = self.getIK(len(cvt_plan), prev, goals)
+      goals.append(p)
+    cvt_goals = self.convertGoals(goals)
+    js_pts = self.getIK(prev, cvt_goals,tol)
     for i in range (0,len(js_pts),6):
-        js_pt = [js_pts[i],js_pts[i+1],js_pts[i+2],js_pts[i+3],js_pts[i+4],js_pts[i+5]]
+        js_pt = [js_pts[i].positions[0],js_pts[i].positions[1],js_pts[i].positions[2],js_pts[i].positions[3],js_pts[i].positions[4],js_pts[i].positions[5]]
         print js_pt
 	js_plan.append(js_pt)
  #   prev = js_pt
