@@ -12,10 +12,10 @@ def initGlobals():
 
   _initialized = True
 
-class Retrieval:
+class Mapping:
   def __init__(self):
 
-class RetrievalState(smach.State):
+class MappingState(smach.State):
   def __init__(self):
     smach.State.__init__(self,
                          outcomes=['succeeded'],

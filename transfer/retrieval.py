@@ -20,9 +20,9 @@ class Retrieval:
     name = "c1"
     loc = self.directory + name
 
-    dmps = loadDMPs(loc)
-    targeters = loadTargeters(loc)
-    objects = loadObjects(loc)
+    dmps = loadDMPs(loc+"/dmp.txt")
+    targeters = loadTargeters(loc+"/targeters.txt")
+    objects = loadObjects(loc+"/objects.txt")
     case = Case(loc, name, dmps, targeters, objects)
     return case
 
@@ -32,11 +32,11 @@ class Retrieval:
     dmps = []
     for i in range(0, len(lines), 5):
 	dmp = DMPData()
-	dmp.k_gain = float(lines[i])
-	dmp.d_gain = float(lines[i+1])
-	dmp.weights = map(float,lines[i+2].split(",")
-	dmp.f_domain = map(float,lines[i+3].split(",")
-	dmp.f_targets = map(float,lines[i+4].split(",")
+	dmp.k_gain = float(lines[i].split(":")[1])
+	dmp.d_gain = float(lines[i+1].split(":")[1])
+	dmp.weights = map(float,lines[i+2].split(":")[1].split(","))
+	dmp.f_domain = map(float,lines[i+3].split(":")[1].split(","))
+	dmp.f_targets = map(float,lines[i+4].split(":")[1].split(","))
 	dmps.append(dmp)
     return dmps
 
