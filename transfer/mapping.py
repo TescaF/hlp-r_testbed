@@ -17,8 +17,29 @@ class Mapping:
   def __init__(self):
 
   def pruneMappingHypotheses(self, hypSpace, srcId, tgtId):
+    pruned = []
+    for m in hypSpace:
+      if m[srcId][tgtId] is 1:
+	pruned.append(m)
+    return pruned
 
-  def pruneFeatureSpace(self, ftSetSpace, srcId, tgtId):
+  def pruneFeatureSpace(self, ftSetSpace, hypSpace, unmappedSrc):
+    pruned = []
+    for ftSet in ftSetSpace:
+      addFtSet = True
+      for ft in ftSet:
+	var = self.featureVariance(unmappedSrc, ft)
+        if var is 0:
+	  addFtSet = False
+      if addFtSet:
+	pruned.append(ftSet)
+    return pruned
+
+  def featureVariance(self, objs, ft):
+    vals = []
+    for o in objs:
+      vals.append(o.getFeatureValue(ft))
+    return np.var(vals)
 
   def evalHypotheses(self, hypSpace, ftSetSpace, src, tgt):
     e = np.zeros((len(src), len(tgt)))
@@ -35,7 +56,33 @@ class Mapping:
     return e
 
   def predictMapping(self, hypSpace, ftSetSpace, evals):
+    maxMapVal = -1
+    maxMap = None
+    maxMapFtSet = None
 
+    for m in hypSpace:
+      maxVal = -1
+      maxFtSet = None
+
+      for ftSet in ftSetSpace:
+        #get value of mapping + ftset: V(m,f)
+        val = 0
+        for ft in ftSet:
+  	  e = np.array(evals)[:,:,ft.idx]
+	  val += np.multiply(m, e)
+        val = val / len(ftSet)
+
+	#promote if best ftset value
+        if val > maxVal:
+	  val = maxVal
+	  maxFtSet = ftSet
+
+      if maxVal > maxMapVal:
+	maxMapVal = maxVal
+	maxMap = m
+	maxMapFtSet = maxFtSet
+
+    return maxMap, maxMapFtSet
 
 class SimilarityMetric:
 
