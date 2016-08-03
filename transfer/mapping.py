@@ -68,7 +68,7 @@ class Mapping:
         #get value of mapping + ftset: V(m,f)
         val = 0
         for ft in ftSet:
-  	  e = np.array(evals)[:,:,ft.idx]
+  	  e = np.array(evals)[:,:,TableObject.indexOfFeature(ft)]
 	  val += np.multiply(m, e)
         val = val / len(ftSet)
 
